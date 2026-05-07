@@ -98,4 +98,137 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 65)
 Title.BackgroundColor3 = Color3.fromRGB(255, 0, 80)
 Title.Text = "ARSENAL SC"
-... (134 linhas)
+Title.TextColor3 = Color3.new(1,1,1)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBlack
+Title.Parent = MainFrame
+
+-- Função de Toggle Corrigida
+local function CreateProToggle(initialText, y, variableRef, callback)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(0.88, 0, 0, 55)
+	btn.Position = UDim2.new(0.06, 0, 0, y)
+	btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	btn.Text = initialText
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.TextScaled = true
+	btn.Font = Enum.Font.GothamSemibold
+	btn.Parent = MainFrame
+	
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+	Instance.new("UIStroke", btn).Color = Color3.fromRGB(255, 0, 80)
+	
+	btn.MouseButton1Click:Connect(function()
+		variableRef[1] = not variableRef[1]  -- Atualiza a variável
+		callback(variableRef[1])
+		btn.Text = initialText:gsub("OFF", variableRef[1] and "ON ✅" or "OFF ❌")
+	end)
+	
+	return btn
+end
+
+-- Usando referência para atualizar corretamente
+local aimRef = {AimbotEnabled}
+local espRef = {ESPEnabled}
+
+local aimBtn = CreateProToggle("Aimbot: OFF", 85, aimRef, function(state)
+	AimbotEnabled = state
+end)
+
+local espBtn = CreateProToggle("ESP: OFF", 155, espRef, function(state)
+	ESPEnabled = state
+end)
+
+local closeBtn = CreateProToggle("FECHAR MENU", 225, {false}, function()
+	MainFrame.Visible = false
+	PlaySound(false)
+end)
+
+-- Clique na Logo
+LogoButton.MouseButton1Click:Connect(function()
+	local isOpening = not MainFrame.Visible
+	MainFrame.Visible = isOpening
+	PlaySound(isOpening)
+end)
+
+print("✅ Arsenal SC carregado!")
+print("Clique na logo 'SC' para abrir o menu")
+
+-- ==================== ESP + AIMBOT ====================
+local ESPObjects = {}
+
+local function CreateESP(plr)
+	if plr == LocalPlayer or ESPObjects[plr] then return end
+	local box = Drawing.new("Square")
+	box.Thickness = 2.8
+	box.Filled = false
+	box.Color = Color3.fromRGB(255, 0, 80)
+	box.Transparency = 1
+	ESPObjects[plr] = box
+end
+
+local function UpdateESP()
+	for plr, box in pairs(ESPObjects) do
+		local char = plr.Character
+		if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Head") and ESPEnabled then
+			if plr.Team == LocalPlayer.Team then box.Visible = false continue end
+			local rootPos, onScreen = Camera:WorldToViewportPoint(char.HumanoidRootPart.Position)
+			if onScreen then
+				local head = char.Head
+				local top = Camera:WorldToViewportPoint(head.Position + Vector3.new(0,1,0))
+				local bottom = Camera:WorldToViewportPoint(char.HumanoidRootPart.Position - Vector3.new(0,3,0))
+				local height = bottom.Y - top.Y
+				box.Size = Vector2.new(height/2, height)
+				box.Position = Vector2.new(rootPos.X - box.Size.X/2, top.Y)
+				box.Visible = true
+			else
+				box.Visible = false
+			end
+		else
+			box.Visible = false
+		end
+	end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do CreateESP(plr) end
+Players.PlayerAdded:Connect(CreateESP)
+
+local function IsVisible(target)
+	local origin = Camera.CFrame.Position
+	local direction = (target.Position - origin)
+	local ray = Ray.new(origin, direction.Unit * 500)
+	local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+	return hit == nil or hit:IsDescendantOf(target.Parent)
+end
+
+RunService.RenderStepped:Connect(function()
+	UpdateESP()
+	
+	if not AimbotEnabled then return end
+	
+	local closest = nil
+	local shortest = 9999
+	
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("Head") then continue end
+		if player.Team == LocalPlayer.Team then continue end
+		
+		local head = player.Character.Head
+		if not IsVisible(head) then continue end
+		
+		local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+		if onScreen then
+			local mousePos = UserInputService:GetMouseLocation()
+			local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+			if dist < shortest then
+				shortest = dist
+				closest = head
+			end
+		end
+	end
+	
+	if closest then
+		local targetCFrame = CFrame.lookAt(Camera.CFrame.Position, closest.Position)
+		Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.17)
+	end
+end)
